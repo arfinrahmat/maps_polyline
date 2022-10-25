@@ -1,7 +1,9 @@
 package com.smhg.mapspolyline
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.graphics.Color
+import android.location.Location
 import android.os.Bundle
 import android.os.Looper
 import androidx.appcompat.app.AppCompatActivity
@@ -18,6 +20,11 @@ import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.PolylineOptions
 import com.smhg.mapspolyline.databinding.ActivityMapsBinding
+import com.smhg.mapspolyline.manager.LocationManager
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import pub.devrel.easypermissions.AfterPermissionGranted
 import pub.devrel.easypermissions.EasyPermissions
 
@@ -30,11 +37,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var mMap: GoogleMap
     private lateinit var binding: ActivityMapsBinding
 
-    private val fusedLocationProvider: FusedLocationProviderClient by lazy {
-        LocationServices.getFusedLocationProviderClient(this)
+    private val locationManager: LocationManager by lazy {
+        LocationManager(this)
     }
-
-    private lateinit var locationCallback: LocationCallback
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,6 +77,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
         getLocationWithPermission()
 
+        binding.tvResultCoordinate.setOnClickListener {
+            Intent(this, UserActivity::class.java).also {
+                startActivity(it)
+            }
+        }
     }
 
     override fun onRequestPermissionsResult(
@@ -102,37 +112,19 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     @SuppressLint("MissingPermission", "SetTextI18n")
     private fun getLocation(){
-//        fusedLocationProvider.lastLocation
-//            .addOnSuccessListener {
-//
-//                val latLng = LatLng(it.latitude, it.longitude)
-//                binding.tvResultCoordinate.text = "${latLng.latitude}, ${latLng.longitude}"
-//            }
-        if(!this::locationCallback.isInitialized) {
-            locationCallback = object : LocationCallback() {
-                override fun onLocationResult(result: LocationResult) {
-                    for(location in result.locations) {
-                        val latLng = LatLng(location.latitude, location.longitude)
-                        binding.tvResultCoordinate.text = "${latLng.latitude}, ${latLng.longitude}"
-                    }
-                }
-            }
-        }
 
-        val locationRequest = LocationRequest.create().apply {
-            priority = Priority.PRIORITY_HIGH_ACCURACY
-            interval = 1000
-        }
+       MainScope().launch {
+           locationManager.getLocationFlow().collect(onLocationResult())
+       }
+    }
 
-        fusedLocationProvider.requestLocationUpdates(
-            locationRequest,
-            locationCallback,
-            Looper.getMainLooper()
-        ).addOnCanceledListener {
-            binding.tvResultCoordinate.text = "Canceled By User"
-        }.addOnFailureListener {
-            binding.tvResultCoordinate.text = it.message
-        }
+    @SuppressLint("SetTextI18n")
+    private fun onLocationResult() = FlowCollector<Location> { location ->
+        binding.tvResultCoordinate.text =  "${location.latitude}, ${location.longitude}"
+        println("----LOCATION UPDATE -> ${location.latitude}, ${location.longitude}")
+
+        val newLatLng = LatLng(location.latitude, location.longitude)
+        mMap.animateCamera(CameraUpdateFactory.newLatLng(newLatLng))
     }
 }
 
