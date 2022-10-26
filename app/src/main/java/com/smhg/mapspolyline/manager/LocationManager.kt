@@ -45,8 +45,20 @@ class LocationManager(private val context: Context) {
             awaitClose { fusedLocationProvider.removeLocationUpdates(locationCallback) }
         }
         return callBackFlow.distinctUntilChanged { old, new ->
-            old.distanceTo(new) < 20f
+            old.distanceTo(new) < 10f
         }
     }
+    @SuppressLint("MissingPermission")
+    fun getLastLocation(lastLocation: (Location) -> Unit)  {
+        val lastLocationRequest = LastLocationRequest.Builder()
+            .build()
 
+        fusedLocationProvider.getLastLocation(lastLocationRequest)
+            .addOnFailureListener {
+                it.printStackTrace()
+            }.addOnSuccessListener {
+                println("AAAA -> $it")
+                lastLocation.invoke(it)
+            }
+    }
 }
